@@ -146,8 +146,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['judul'])) {
         <img src="images/dokumen.png" alt="Dokumen">
         <button onclick="openModal()">Click Here</button>
       </div>
+    
+
+     <!-- Kritik & Saran -->
+      <div class="image-box">
+        <h3>Kritik & Saran</h3>
+        <img src="images/saran.jpg" alt="Kritik & Saran">
+        <button onclick="window.location.href='saran.php'">Click Here</button>
+      </div>
     </div>
-  </div>
 
   <!-- Modal Form -->
   <div class="modal" id="dokumenModal">
