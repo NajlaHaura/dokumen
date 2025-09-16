@@ -11,20 +11,6 @@ $user_id = $_SESSION['user_id'];
 include "db.php";
 $db = new DB();
 
-// proses simpan judul dokumen
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['judul'])) {
-    $judul = mysqli_real_escape_string($db->koneksiDB(), $_POST['judul']);
-
-    // simpan dengan relasi ke user
-    $sql = "INSERT INTO judul_dokumen (judul, user_id) VALUES ('$judul', '$user_id')";
-    $db->runSQL($sql);
-
-    echo "<script>
-            alert('Judul dokumen berhasil disimpan!');
-            window.location.href='doc_design.php';
-          </script>";
-    exit();
-}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -77,43 +63,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['judul'])) {
       width: 100%; height: 100%; background: rgba(0,0,0,0.5);
       justify-content: center; align-items: center;
     }
-    .modal-content {
-      background: white; padding: 20px; border-radius: 10px;
-      text-align: center; width: 300px;
-    }
-    .modal-content h3 {margin-bottom: 15px;}
-    .modal-content input {
-      width: 90%; padding: 8px; margin-bottom: 10px;
-      border-radius: 5px; border: 1px solid #ccc;
-    }
-    .modal-content button {
-      padding: 8px 15px; border: none; border-radius: 6px; cursor: pointer;
-    }
-    .modal-content button[type="submit"] {background: #2e2b28ff; color: white;}
-    .modal-content button[type="button"] {background: #ccc; margin-top: 8px;}
-    @media (max-width: 600px) {
-      .navbar {flex-direction: column; align-items: flex-start; gap: 8px;}
-      .navbar h1 {font-size: 16px;}
-      .navbar .right {width: 100%; justify-content: space-between;}
-      .image-container {flex-direction: column; gap: 40px;}
-    }
   </style>
   <script>
     function confirmLogout(event) {
       event.preventDefault();
       if (confirm("Apakah Anda yakin ingin logout?")) {
         window.location.href = "logout.php";
-      }
-    }
-    function openModal() {
-      document.getElementById("dokumenModal").style.display = "flex";
-    }
-    function closeModal() {
-      document.getElementById("dokumenModal").style.display = "none";
-    }
-    function confirmSubmit(event) {
-      if (!confirm("Apakah Anda yakin ingin submit dokumen?")) {
-        event.preventDefault();
       }
     }
   </script>
@@ -144,7 +99,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['judul'])) {
       <div class="image-box">
         <h3>Dokumen</h3>
         <img src="images/dokumen.png" alt="Dokumen">
-        <button onclick="openModal()">Click Here</button>
+        <button onclick="window.location.href='doc_design.php'">Click Here</button>
       </div>
     
 
@@ -156,17 +111,5 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['judul'])) {
       </div>
     </div>
 
-  <!-- Modal Form -->
-  <div class="modal" id="dokumenModal">
-    <div class="modal-content">
-      <h3>Tambah Dokumen</h3>
-      <form method="POST" onsubmit="confirmSubmit(event)">
-        <input type="text" name="judul" placeholder="Judul Dokumen" required>
-        <button type="submit">Submit</button>
-      </form>
-      <br>
-      <button type="button" onclick="closeModal()">Tutup</button>
-    </div>
-  </div>
 </body>
 </html>
