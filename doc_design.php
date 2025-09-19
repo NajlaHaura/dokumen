@@ -15,157 +15,195 @@ $user_id = $_SESSION['user_id'];
 // Handle AJAX requests
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
     header('Content-Type: application/json');
-    
-    switch ($_POST['action']) {
-        case 'save_document_title':
-            $judul = trim($_POST['judul']);
-            
-            if (empty($judul)) {
-                echo json_encode(['success' => false, 'error' => 'Judul tidak boleh kosong']);
+
+    try {
+        switch ($_POST['action']) {
+            case 'save_document_title':
+                $judul = trim($_POST['judul']);
+                
+                if (empty($judul)) {
+                    echo json_encode(['success' => false, 'error' => 'Judul tidak boleh kosong']);
+                    exit();
+                }
+                
+                // Check if user already has a document title
+                $check_query = "SELECT id FROM judul_dokumen WHERE user_id = ?";
+                $check_stmt = $conn->prepare($check_query);
+                $check_stmt->bind_param("i", $user_id);
+                $check_stmt->execute();
+                $check_result = $check_stmt->get_result();
+                
+                if ($check_result->num_rows > 0) {
+                    // Update existing title
+                    $update_query = "UPDATE judul_dokumen SET judul = ? WHERE user_id = ?";
+                    $update_stmt = $conn->prepare($update_query);
+                    $update_stmt->bind_param("si", $judul, $user_id);
+                    
+                    if ($update_stmt->execute()) {
+                        echo json_encode(['success' => true, 'message' => 'Judul dokumen berhasil diupdate']);
+                    } else {
+                        echo json_encode(['success' => false, 'error' => $conn->error]);
+                    }
+                } else {
+                    // Insert new title
+                    $insert_query = "INSERT INTO judul_dokumen (user_id, judul) VALUES (?, ?)";
+                    $insert_stmt = $conn->prepare($insert_query);
+                    $insert_stmt->bind_param("is", $user_id, $judul);
+                    
+                    if ($insert_stmt->execute()) {
+                        $judul_id = $conn->insert_id;
+                        echo json_encode(['success' => true, 'id' => $judul_id, 'message' => 'Judul dokumen berhasil disimpan']);
+                    } else {
+                        echo json_encode(['success' => false, 'error' => $conn->error]);
+                    }
+                }
                 exit();
-            }
-            
-            // Check if user already has a document title
-            $check_query = "SELECT id FROM judul_dokumen WHERE user_id = ?";
-            $check_stmt = $conn->prepare($check_query);
-            $check_stmt->bind_param("i", $user_id);
-            $check_stmt->execute();
-            $check_result = $check_stmt->get_result();
-            
-            if ($check_result->num_rows > 0) {
-                // Update existing title
-                $update_query = "UPDATE judul_dokumen SET judul = ? WHERE user_id = ?";
-                $update_stmt = $conn->prepare($update_query);
-                $update_stmt->bind_param("si", $judul, $user_id);
                 
-                if ($update_stmt->execute()) {
-                    echo json_encode(['success' => true, 'message' => 'Judul dokumen berhasil diupdate']);
-                } else {
-                    echo json_encode(['success' => false, 'error' => $conn->error]);
-                }
-            } else {
-                // Insert new title
-                $insert_query = "INSERT INTO judul_dokumen (user_id, judul) VALUES (?, ?)";
-                $insert_stmt = $conn->prepare($insert_query);
-                $insert_stmt->bind_param("is", $user_id, $judul);
-                
-                if ($insert_stmt->execute()) {
-                    $judul_id = $conn->insert_id;
-                    echo json_encode(['success' => true, 'id' => $judul_id, 'message' => 'Judul dokumen berhasil disimpan']);
-                } else {
-                    echo json_encode(['success' => false, 'error' => $conn->error]);
-                }
-            }
-            exit();
-            
-        case 'get_document_title':
-            $query = "SELECT judul FROM judul_dokumen WHERE user_id = ?";
-            $stmt = $conn->prepare($query);
-            $stmt->bind_param("i", $user_id);
-            $stmt->execute();
-            $result = $stmt->get_result();
-            
-            if ($row = $result->fetch_assoc()) {
-                echo json_encode(['success' => true, 'judul' => $row['judul']]);
-            } else {
-                echo json_encode(['success' => true, 'judul' => '']);
-            }
-            exit();
-            
-        case 'save_item':
-            $type = $_POST['type']; // Sekarang berisi nomor hierarki seperti "1", "1.1", "1.1.1"
-            $judul = $_POST['judul'];
-            $parent_id = isset($_POST['parent_id']) ? $_POST['parent_id'] : null;
-            
-            // Get judul_dokumen ID for this user
-            $judul_query = "SELECT id FROM judul_dokumen WHERE user_id = ?";
-            $judul_stmt = $conn->prepare($judul_query);
-            $judul_stmt->bind_param("i", $user_id);
-            $judul_stmt->execute();
-            $judul_result = $judul_stmt->get_result();
-            $id_judul_dokumen = null;
-            
-            if ($judul_row = $judul_result->fetch_assoc()) {
-                $id_judul_dokumen = $judul_row['id'];
-            }
-            
-            $query = "INSERT INTO laporan (user_id, type, judul, parent_id, id_judul_dokumen) VALUES (?, ?, ?, ?, ?)";
-            $stmt = $conn->prepare($query);
-            $stmt->bind_param("issii", $user_id, $type, $judul, $parent_id, $id_judul_dokumen);
-            
-            if ($stmt->execute()) {
-                echo json_encode(['success' => true, 'id' => $conn->insert_id]);
-            } else {
-                echo json_encode(['success' => false, 'error' => $conn->error]);
-            }
-            exit();
-            
-        case 'update_item':
-            $id = $_POST['id'];
-            $judul = $_POST['judul'];
-            
-            $query = "UPDATE laporan SET judul = ? WHERE id = ? AND user_id = ?";
-            $stmt = $conn->prepare($query);
-            $stmt->bind_param("sii", $judul, $id, $user_id);
-            
-            if ($stmt->execute()) {
-                echo json_encode(['success' => true]);
-            } else {
-                echo json_encode(['success' => false, 'error' => $conn->error]);
-            }
-            exit();
-            
-        case 'delete_item':
-            $id = $_POST['id'];
-            
-            // Delete item and all its children (cascade delete)
-            $deleteChildren = function($parent_id) use ($conn, $user_id, &$deleteChildren) {
-                $query = "SELECT id FROM laporan WHERE parent_id = ? AND user_id = ?";
+            case 'get_document_title':
+                $query = "SELECT judul FROM judul_dokumen WHERE user_id = ?";
                 $stmt = $conn->prepare($query);
-                $stmt->bind_param("ii", $parent_id, $user_id);
+                $stmt->bind_param("i", $user_id);
                 $stmt->execute();
                 $result = $stmt->get_result();
                 
-                while ($row = $result->fetch_assoc()) {
-                    $deleteChildren($row['id']);
+                if ($row = $result->fetch_assoc()) {
+                    echo json_encode(['success' => true, 'judul' => $row['judul']]);
+                } else {
+                    echo json_encode(['success' => true, 'judul' => '']);
+                }
+                exit();
+            
+            case 'delete_document_title':
+                // Perbaikan: Hapus data laporan terkait terlebih dahulu
+                $check_query = "SELECT id FROM judul_dokumen WHERE user_id = ?";
+                $check_stmt = $conn->prepare($check_query);
+                $check_stmt->bind_param("i", $user_id);
+                $check_stmt->execute();
+                $check_result = $check_stmt->get_result();
+
+                if ($check_result->num_rows > 0) {
+                    $judul_row = $check_result->fetch_assoc();
+                    $id_judul_dokumen = $judul_row['id'];
+                    
+                    // Hapus semua item laporan yang terkait
+                    $delete_laporan_query = "DELETE FROM laporan WHERE id_judul_dokumen = ? AND user_id = ?";
+                    $delete_laporan_stmt = $conn->prepare($delete_laporan_query);
+                    $delete_laporan_stmt->bind_param("ii", $id_judul_dokumen, $user_id);
+                    $delete_laporan_stmt->execute();
+
+                    // Setelah item laporan dihapus, baru hapus judulnya
+                    $delete_judul_query = "DELETE FROM judul_dokumen WHERE id = ? AND user_id = ?";
+                    $delete_judul_stmt = $conn->prepare($delete_judul_query);
+                    $delete_judul_stmt->bind_param("ii", $id_judul_dokumen, $user_id);
+                    
+                    if ($delete_judul_stmt->execute()) {
+                        echo json_encode(['success' => true, 'message' => 'Judul dokumen dan semua laporan terkait berhasil dihapus']);
+                    } else {
+                        echo json_encode(['success' => false, 'error' => $conn->error]);
+                    }
+                } else {
+                    echo json_encode(['success' => false, 'error' => 'Tidak ada judul dokumen untuk dihapus.']);
+                }
+                exit();
+
+            case 'save_item':
+                $type = $_POST['type'];
+                $judul = $_POST['judul'];
+                $parent_id = isset($_POST['parent_id']) ? $_POST['parent_id'] : null;
+                
+                $judul_query = "SELECT id FROM judul_dokumen WHERE user_id = ?";
+                $judul_stmt = $conn->prepare($judul_query);
+                $judul_stmt->bind_param("i", $user_id);
+                $judul_stmt->execute();
+                $judul_result = $judul_stmt->get_result();
+                $id_judul_dokumen = null;
+                
+                if ($judul_row = $judul_result->fetch_assoc()) {
+                    $id_judul_dokumen = $judul_row['id'];
                 }
                 
-                $query = "DELETE FROM laporan WHERE parent_id = ? AND user_id = ?";
+                $query = "INSERT INTO laporan (user_id, type, judul, parent_id, id_judul_dokumen) VALUES (?, ?, ?, ?, ?)";
                 $stmt = $conn->prepare($query);
-                $stmt->bind_param("ii", $parent_id, $user_id);
+                $stmt->bind_param("issii", $user_id, $type, $judul, $parent_id, $id_judul_dokumen);
+                
+                if ($stmt->execute()) {
+                    echo json_encode(['success' => true, 'id' => $conn->insert_id]);
+                } else {
+                    echo json_encode(['success' => false, 'error' => $conn->error]);
+                }
+                exit();
+                
+            case 'update_item':
+                $id = $_POST['id'];
+                $judul = $_POST['judul'];
+                
+                $query = "UPDATE laporan SET judul = ? WHERE id = ? AND user_id = ?";
+                $stmt = $conn->prepare($query);
+                $stmt->bind_param("sii", $judul, $id, $user_id);
+                
+                if ($stmt->execute()) {
+                    echo json_encode(['success' => true]);
+                } else {
+                    echo json_encode(['success' => false, 'error' => $conn->error]);
+                }
+                exit();
+            
+            case 'delete_item':
+                $id = $_POST['id'];
+                
+                // Delete item and all its children (cascade delete)
+                $deleteChildren = function($parent_id) use ($conn, $user_id, &$deleteChildren) {
+                    $query = "SELECT id FROM laporan WHERE parent_id = ? AND user_id = ?";
+                    $stmt = $conn->prepare($query);
+                    $stmt->bind_param("ii", $parent_id, $user_id);
+                    $stmt->execute();
+                    $result = $stmt->get_result();
+                    
+                    while ($row = $result->fetch_assoc()) {
+                        $deleteChildren($row['id']);
+                    }
+                    
+                    $query = "DELETE FROM laporan WHERE parent_id = ? AND user_id = ?";
+                    $stmt = $conn->prepare($query);
+                    $stmt->bind_param("ii", $parent_id, $user_id);
+                    $stmt->execute();
+                };
+                
+                // Delete children first
+                $deleteChildren($id);
+                
+                // Delete the item itself
+                $query = "DELETE FROM laporan WHERE id = ? AND user_id = ?";
+                $stmt = $conn->prepare($query);
+                $stmt->bind_param("ii", $id, $user_id);
+                
+                if ($stmt->execute()) {
+                    echo json_encode(['success' => true]);
+                } else {
+                    echo json_encode(['success' => false, 'error' => $conn->error]);
+                }
+                exit();
+                
+            case 'load_items':
+                $query = "SELECT * FROM laporan WHERE user_id = ? ORDER BY type ASC";
+                $stmt = $conn->prepare($query);
+                $stmt->bind_param("i", $user_id);
                 $stmt->execute();
-            };
-            
-            // Delete children first
-            $deleteChildren($id);
-            
-            // Delete the item itself
-            $query = "DELETE FROM laporan WHERE id = ? AND user_id = ?";
-            $stmt = $conn->prepare($query);
-            $stmt->bind_param("ii", $id, $user_id);
-            
-            if ($stmt->execute()) {
-                echo json_encode(['success' => true]);
-            } else {
-                echo json_encode(['success' => false, 'error' => $conn->error]);
-            }
-            exit();
-            
-        case 'load_items':
-            $query = "SELECT * FROM laporan WHERE user_id = ? ORDER BY type ASC";
-            $stmt = $conn->prepare($query);
-            $stmt->bind_param("i", $user_id);
-            $stmt->execute();
-            $result = $stmt->get_result();
-            
-            $items = [];
-            while ($row = $result->fetch_assoc()) {
-                $items[] = $row;
-            }
-            
-            echo json_encode(['success' => true, 'items' => $items]);
-            exit();
+                $result = $stmt->get_result();
+                
+                $items = [];
+                while ($row = $result->fetch_assoc()) {
+                    $items[] = $row;
+                }
+                
+                echo json_encode(['success' => true, 'items' => $items]);
+                exit();
+        }
+    } catch (Exception $e) {
+        // Tangkap error dan kembalikan respons JSON yang valid
+        echo json_encode(['success' => false, 'error' => 'Server Error: ' . $e->getMessage()]);
     }
+    exit();
 }
 
 // Get document title for header
@@ -188,7 +226,6 @@ if ($title_row = $title_result->fetch_assoc()) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Laporan UI</title>
-    <!-- Load Tailwind CSS from CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         /* Custom styles for the app */
@@ -270,29 +307,27 @@ if ($title_row = $title_result->fetch_assoc()) {
         <div class="header flex justify-between items-center mb-5 border-b pb-4 border-gray-200">
             
             <div class="title-section flex-1">
-                <!-- Title input form (hidden by default if title exists) -->
                 <div id="title-input-form" class="title-input-container" style="<?= $has_saved_title ? 'display: none;' : '' ?>">
-                    <h1 class="text-2xl font-semibold text-gray-800 m-0">Laporan</h1>
+                    <h1 class="text-2xl font-semibold text-gray-800 m-0">PROPOSAL</h1>
                     <input type="text" id="document-title-input" 
-                           class="flex-1 p-2 border border-gray-300 rounded-lg text-lg font-medium text-gray-700 focus:outline-none focus:border-yellow-600 focus:ring-2 focus:ring-yellow-200" 
-                           placeholder="Masukkan judul BAB di sini"
-                           value="<?= htmlspecialchars($document_title) ?>">
+                            class="flex-1 p-2 border border-gray-300 rounded-lg text-lg font-medium text-gray-700 focus:outline-none focus:border-yellow-600 focus:ring-2 focus:ring-yellow-200" 
+                            placeholder="Masukkan judul proposal di sini"
+                            value="<?= htmlspecialchars($document_title) ?>">
                     <button id="save-title-btn" class="bg-transparent border-none text-green-500 cursor-pointer text-xl transition-colors duration-200 hover:text-green-700" title="Simpan Judul">&#x2714;</button>
                 </div>
 
-                <!-- Title display (shown when title is saved) -->
                 <div id="title-display" class="title-display" style="<?= $has_saved_title ? '' : 'display: none;' ?>">
                     <h1 class="text-2xl font-semibold text-gray-800 m-0">
-                        Laporan <span id="display-title"><?= htmlspecialchars($document_title) ?></span>
+                        Proposal <span id="display-title"><?= htmlspecialchars($document_title) ?></span>
                     </h1>
                     <button id="edit-title-btn" class="bg-transparent border-none text-blue-500 cursor-pointer text-xl transition-colors duration-200 hover:text-blue-700" title="Edit Judul">&#x270E;</button>
+                    <button id="delete-title-btn" class="bg-transparent border-none text-red-500 cursor-pointer text-xl transition-colors duration-200 hover:text-red-700" title="Hapus Judul">&#x2326;</button>
                 </div>
             </div>
         </div>
         
         <div id="laporan-container">
-            <!-- BAB and sub-BAB items will be dynamically loaded here -->
-        </div>
+            </div>
 
         <div class="bottom-buttons flex flex-col items-center gap-4 mt-6">
             <div class="add-buttons-container flex gap-4 w-full justify-center">
@@ -300,7 +335,12 @@ if ($title_row = $title_result->fetch_assoc()) {
                 <button class="add-sub-btn px-4 py-2 rounded-full text-sm font-semibold cursor-pointer transition-all duration-200 shadow-md bg-gray-700 text-white hover:bg-gray-800" id="add-sub-btn">Tambahkan sub-BAB</button>
                 <button class="add-point-btn px-4 py-2 rounded-full text-sm font-semibold cursor-pointer transition-all duration-200 shadow-md bg-gray-700 text-white hover:bg-gray-800" id="add-point-btn">Tambahkan Poin</button>
             </div>
-            <button class="download-btn px-4 py-2 rounded-full text-sm font-semibold cursor-pointer transition-all duration-200 shadow-md bg-yellow-600 text-white w-full max-w-[250px] hover:bg-yellow-700" id="download-laporan-btn">Download Laporan</button>
+
+            <div class="flex items-center gap-4">
+                <button class="save-btn px-4 py-2 rounded-full text-sm font-semibold cursor-pointer transition-all duration-200 shadow-md bg-yellow-600 text-white hover:bg-yellow-700" id="save-laporan-btn">Save</button>
+                <button class="download-btn px-4 py-2 rounded-full text-sm font-semibold cursor-pointer transition-all duration-200 shadow-md bg-yellow-600 text-white hover:bg-yellow-700" id="download-laporan-btn">Download Laporan</button>
+            </div>
+
             <div id="download-options-container" class="download-options hidden flex-col gap-2 w-full max-w-[250px]">
                 <button class="px-4 py-2 rounded-full text-sm font-semibold cursor-pointer transition-all duration-200 shadow-md bg-yellow-600 text-white hover:bg-yellow-700" id="download-doc-btn">DOC</button>
                 <button class="px-4 py-2 rounded-full text-sm font-semibold cursor-pointer transition-all duration-200 shadow-md bg-yellow-600 text-white hover:bg-yellow-700" id="download-pdf-btn">PDF</button>
@@ -308,7 +348,6 @@ if ($title_row = $title_result->fetch_assoc()) {
         </div>
     </div>
     
-    <!-- Custom Modal for alerts and confirms -->
     <div id="custom-modal" class="modal">
         <div class="modal-content">
             <p id="modal-message"></p>
@@ -354,11 +393,20 @@ if ($title_row = $title_result->fetch_assoc()) {
                     },
                     body: new URLSearchParams(data)
                 });
-                
-                return await response.json();
+
+                // Handle non-JSON responses gracefully
+                const contentType = response.headers.get("content-type");
+                if (contentType && contentType.indexOf("application/json") !== -1) {
+                    return await response.json();
+                } else {
+                    console.error("Server did not return a valid JSON response.");
+                    const text = await response.text();
+                    console.log("Server response:", text);
+                    return { success: false, error: 'Respons dari server tidak valid. Silakan coba lagi.' };
+                }
             } catch (error) {
                 console.error('AJAX Error:', error);
-                return { success: false, error: error.message };
+                return { success: false, error: 'Terjadi kesalahan jaringan. Mohon periksa koneksi Anda dan coba lagi.' };
             }
         };
 
@@ -366,23 +414,23 @@ if ($title_row = $title_result->fetch_assoc()) {
         const saveDocumentTitle = async () => {
             const titleInput = document.getElementById('document-title-input');
             const title = titleInput.value.trim();
-            
+
             if (!title) {
                 await customModal('Judul dokumen tidak boleh kosong.');
                 return;
             }
-            
+
             const response = await sendAjaxRequest({
                 action: 'save_document_title',
                 judul: title
             });
-            
+
             if (response.success) {
                 // Hide input form, show display
                 document.getElementById('title-input-form').style.display = 'none';
                 document.getElementById('title-display').style.display = 'flex';
                 document.getElementById('display-title').textContent = title;
-                
+
                 await customModal('Judul dokumen berhasil disimpan!');
             } else {
                 await customModal('Gagal menyimpan judul dokumen: ' + response.error);
@@ -392,10 +440,33 @@ if ($title_row = $title_result->fetch_assoc()) {
         const editDocumentTitle = () => {
             const currentTitle = document.getElementById('display-title').textContent;
             document.getElementById('document-title-input').value = currentTitle;
-            
+
             // Show input form, hide display
             document.getElementById('title-display').style.display = 'none';
             document.getElementById('title-input-form').style.display = 'flex';
+        };
+
+        const deleteDocumentTitle = async () => {
+            const confirmed = await customModal('Apakah Anda yakin ingin menghapus judul dokumen ini?', true);
+            if (confirmed) {
+                const response = await sendAjaxRequest({
+                    action: 'delete_document_title'
+                });
+
+                if (response.success) {
+                    // Sembunyikan display, tampilkan input form
+                    document.getElementById('title-display').style.display = 'none';
+                    document.getElementById('title-input-form').style.display = 'flex';
+                    document.getElementById('document-title-input').value = ''; // Kosongkan input
+                    
+                    // Tambahan: muat ulang item laporan jika diperlukan
+                    // loadItemsFromDB(); 
+
+                    await customModal('Judul dokumen berhasil dihapus!');
+                } else {
+                    await customModal('Gagal menghapus judul dokumen: ' + response.error);
+                }
+            }
         };
 
         let counters = {
@@ -459,7 +530,7 @@ if ($title_row = $title_result->fetch_assoc()) {
 
             let innerHTML = `
                 ${labelText ? `<div class="item-label font-semibold whitespace-nowrap">${labelText}</div>` : ''}
-                <textarea class="${type === 'prompt' ? '' : 'input-field bg-yellow-600 text-gray-800 font-medium placeholder-gray-800'} flex-grow p-3 border border-gray-300 rounded-lg text-sm text-gray-700 bg-gray-50 resize-y min-h-[40px] focus:outline-none focus:border-yellow-600 focus:ring-2 focus:ring-yellow-200" placeholder="${placeholderText}">${savedTitle}</textarea>
+                <textarea class="${type === 'prompt' ? '' : 'input-field'} flex-grow p-3 border border-gray-300 rounded-lg text-sm text-gray-700 bg-gray-50 resize-y min-h-[40px] focus:outline-none focus:border-yellow-600 focus:ring-2 focus:ring-yellow-200" placeholder="${placeholderText}">${savedTitle}</textarea>
                 <div class="saved-text flex-grow p-3 font-medium text-gray-800 ${savedTitle ? '' : 'hidden'}">${savedTitle ? (labelText ? `${labelText} (${savedTitle})` : savedTitle) : ''}</div>
             `;
 
@@ -500,7 +571,7 @@ if ($title_row = $title_result->fetch_assoc()) {
                 dbItems = response.items;
                 renderItemsFromDB();
             } else {
-                await customModal('Error loading items: ' + response.error);
+                await customModal('Tidak dapat memuat data. Mohon muat ulang halaman atau coba lagi.');
             }
         };
 
@@ -646,6 +717,18 @@ if ($title_row = $title_result->fetch_assoc()) {
             }
         };
 
+        const checkTitleFilled = async () => {
+            const titleDisplay = document.getElementById('title-display');
+            const titleInput = document.getElementById('document-title-input');
+            
+            // Cek apakah judul sudah tersimpan atau tidak
+            if (titleDisplay.style.display === 'none' && titleInput.value.trim() === '') {
+                await customModal('Mohon isi terlebih dahulu judul proposal Anda.');
+                return false;
+            }
+            return true;
+        };
+
         // Save item to database - sekarang mengirim hierarchy path sebagai type
         const saveItemToDB = async (hierarchyPath, judul, parentId = null) => {
             const response = await sendAjaxRequest({
@@ -692,10 +775,12 @@ if ($title_row = $title_result->fetch_assoc()) {
             // Document title event listeners
             const saveTitleBtn = document.getElementById('save-title-btn');
             const editTitleBtn = document.getElementById('edit-title-btn');
+            const deleteTitleBtn = document.getElementById('delete-title-btn');
             const titleInput = document.getElementById('document-title-input');
 
             saveTitleBtn.addEventListener('click', saveDocumentTitle);
             editTitleBtn.addEventListener('click', editDocumentTitle);
+            deleteTitleBtn.addEventListener('click', deleteDocumentTitle);
             
             // Allow Enter key to save title
             titleInput.addEventListener('keypress', (e) => {
@@ -707,7 +792,9 @@ if ($title_row = $title_result->fetch_assoc()) {
             // Load items on page load
             loadItemsFromDB();
 
-            const addBabItem = () => {
+            const addBabItem = async () => {
+                if (!await checkTitleFilled()) return;
+
                 const babNumber = getNextNumber(null);
                 const babPath = babNumber.toString();
                 
@@ -717,7 +804,9 @@ if ($title_row = $title_result->fetch_assoc()) {
                 insertItemWithPrompt(newBabItem, newPromptItem);
             };
 
-            const addSubItem = () => {
+            const addSubItem = async () => {
+                if (!await checkTitleFilled()) return;
+                
                 const items = getAllItems();
                 let lastBabPath = '1';
                 
@@ -727,6 +816,13 @@ if ($title_row = $title_result->fetch_assoc()) {
                     }
                 });
                 
+                // Pengecekan apakah ada BAB yang sudah tersimpan
+                const lastBabItem = items.find(item => item.dataset.hierarchyPath === lastBabPath);
+                if (!lastBabItem || !lastBabItem.dataset.dbId) {
+                    await customModal('Isi terlebih dahulu sesuai urutan (Simpan BAB terlebih dahulu).');
+                    return;
+                }
+
                 const subNumber = getNextNumber(lastBabPath);
                 const subPath = lastBabPath + '.' + subNumber;
                 
@@ -737,14 +833,23 @@ if ($title_row = $title_result->fetch_assoc()) {
                 insertItemWithPrompt(newSubItem, newPromptItem, insertBefore);
             };
 
-            const addPointItem = () => {
-                const lastSubBabPath = getLastSubBabPath();
+            const addPointItem = async () => {
+                if (!await checkTitleFilled()) return;
                 
+                const lastSubBabPath = getLastSubBabPath();
+
                 if (!lastSubBabPath) {
-                    addSubItem();
+                    await customModal('Isi terlebih dahulu sesuai urutan (Tambahkan sub-BAB terlebih dahulu).');
                     return;
                 }
-                
+
+                // Pengecekan apakah sub-BAB terakhir sudah tersimpan
+                const lastSubBabItem = getAllItems().find(item => item.dataset.hierarchyPath === lastSubBabPath);
+                if (!lastSubBabItem || !lastSubBabItem.dataset.dbId) {
+                    await customModal('Isi terlebih dahulu sesuai urutan (Simpan sub-BAB terlebih dahulu).');
+                    return;
+                }
+
                 const pointNumber = getNextNumber(lastSubBabPath);
                 const pointPath = lastSubBabPath + '.' + pointNumber;
                 
@@ -790,30 +895,35 @@ if ($title_row = $title_result->fetch_assoc()) {
                         return;
                     }
                     
+                    // Cek apakah judul proposal sudah terisi
+                    const titleDisplay = document.getElementById('title-display');
+                    if (titleDisplay.style.display === 'none') {
+                        await customModal('Mohon isi terlebih dahulu judul proposal Anda.');
+                        return;
+                    }
+                    
+                    // Pengecekan urutan
+                    const hierarchyPath = item.dataset.hierarchyPath;
+                    const pathParts = hierarchyPath.split('.');
+                    const type = getItemTypeFromPath(hierarchyPath);
+                    
+                    if (type !== 'bab') {
+                        const parentPath = pathParts.slice(0, -1).join('.');
+                        const parentItem = getAllItems().find(elem => elem.dataset.hierarchyPath === parentPath);
+                        if (!parentItem || !parentItem.dataset.dbId) {
+                            await customModal('Isi terlebih dahulu sesuai urutan (Simpan Judul Proposal terlebih dahulu).');
+                            return;
+                        }
+                    }
+
                     // Set loading state
                     item.classList.add('loading');
                     
                     const value = textarea.value.trim();
-                    const hierarchyPath = item.dataset.hierarchyPath;
-                    
-                    // Find parent ID if this is a child item
-                    let parentId = null;
-                    const pathParts = hierarchyPath.split('.');
-                    
-                    if (pathParts.length > 1) {
-                        // This is a child item, find parent
-                        const parentPath = pathParts.slice(0, -1).join('.');
-                        const items = getAllItems();
-                        
-                        for (let i = 0; i < items.length; i++) {
-                            if (items[i].dataset.hierarchyPath === parentPath && items[i].dataset.dbId) {
-                                parentId = items[i].dataset.dbId;
-                                break;
-                            }
-                        }
-                    }
-                    
-                    // Save to database - kirim hierarchy path sebagai type
+                    const parentId = type !== 'bab' ?
+                        (getAllItems().find(elem => elem.dataset.hierarchyPath === pathParts.slice(0, -1).join('.'))?.dataset.dbId || null) :
+                        null;
+
                     const response = await saveItemToDB(hierarchyPath, value, parentId);
                     
                     // Remove loading state
@@ -840,15 +950,17 @@ if ($title_row = $title_result->fetch_assoc()) {
                         editBtn.style.display = 'block';
                         item.dataset.savedValue = value;
 
-                        await customModal(`Item '${value}' berhasil disimpan ke database.`);
+                        await customModal(`Item '${value}' berhasil disimpan.`);
                     } else {
-                        await customModal('Gagal menyimpan ke database: ' + response.error);
+                        await customModal('Gagal menyimpan: ' + response.error);
                     }
 
                 } else if (target.classList.contains('edit-btn')) {
                     // Switch to edit mode
                     textarea.style.display = 'block';
-                    saveBtn.style.display = 'none'; // Hide save, show update
+                    // Find and hide save button if it exists
+                    const saveButton = item.querySelector('.save-btn');
+                    if(saveButton) saveButton.style.display = 'none';
                     editBtn.style.display = 'none';
                     savedContent.style.display = 'none';
                     
@@ -857,13 +969,16 @@ if ($title_row = $title_result->fetch_assoc()) {
                     }
                     
                     // Change save button behavior to update
-                    const updateBtn = saveBtn.cloneNode(true);
-                    updateBtn.title = 'Update';
-                    updateBtn.classList.remove('save-btn');
-                    updateBtn.classList.add('update-btn');
-                    saveBtn.parentNode.replaceChild(updateBtn, saveBtn);
+                    let updateBtn = item.querySelector('.update-btn');
+                    if (!updateBtn) {
+                        updateBtn = document.createElement('button');
+                        updateBtn.className = 'icon-btn update-btn bg-transparent border-none text-green-500 cursor-pointer text-xl transition-colors duration-200 hover:text-green-700';
+                        updateBtn.title = 'Update';
+                        updateBtn.innerHTML = '&#x2714;';
+                        saveBtn.parentNode.insertBefore(updateBtn, editBtn.nextSibling);
+                    }
                     updateBtn.style.display = 'block';
-                    
+
                 } else if (target.classList.contains('update-btn')) {
                     if (textarea.value.trim() === '') {
                         await customModal('Judul tidak boleh kosong.');
@@ -900,20 +1015,13 @@ if ($title_row = $title_result->fetch_assoc()) {
                         editBtn.style.display = 'block';
                         item.dataset.savedValue = value;
                         
-                        // Change update button back to save button
-                        const saveBtn = target.cloneNode(true);
-                        saveBtn.title = 'Simpan';
-                        saveBtn.classList.remove('update-btn');
-                        saveBtn.classList.add('save-btn');
-                        target.parentNode.replaceChild(saveBtn, target);
-
                         await customModal(`Item '${value}' berhasil diupdate.`);
                     } else {
-                        await customModal('Gagal mengupdate database: ' + response.error);
+                        await customModal('Gagal mengupdate: ' + response.error);
                     }
                     
                 } else if (target.classList.contains('delete-icon-btn')) {
-                    const confirmed = await customModal('Apakah Anda yakin ingin menghapus item ini? Semua sub-item juga akan terhapus.', true);
+                    const confirmed = await customModal('Apakah Anda yakin ingin menghapus item ini?', true);
                     if (confirmed) {
                         const dbId = item.dataset.dbId;
                         
@@ -936,10 +1044,10 @@ if ($title_row = $title_result->fetch_assoc()) {
                                     }
                                 });
                                 
-                                await customModal('Item berhasil dihapus dari database.');
+                                await customModal('Item berhasil dihapus.');
                             } else {
                                 item.classList.remove('loading');
-                                await customModal('Gagal menghapus dari database: ' + response.error);
+                                await customModal('Gagal menghapus: ' + response.error);
                             }
                         } else {
                             // Item not saved yet, just remove from UI
@@ -962,7 +1070,7 @@ if ($title_row = $title_result->fetch_assoc()) {
                     aiResultBox.style.display = 'none';
                     item.querySelector('.send-btn').style.display = 'block';
                     item.querySelector('.delete-btn').style.display = 'block';
-                    
+
                     const editBtnPrompt = item.querySelector('.edit-btn');
                     if (editBtnPrompt) {
                         editBtnPrompt.remove();
